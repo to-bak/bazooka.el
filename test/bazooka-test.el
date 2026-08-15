@@ -178,6 +178,48 @@
         (kill-buffer one)
         (kill-buffer two)))))
 
+(ert-deftest bazooka-test-promoted-restores-drive-the-next-toggle ()
+  (bazooka-test--with-clean-frame
+    (let ((a (bazooka-test--buffer 'a))
+          (b (bazooka-test--buffer 'b))
+          (c (bazooka-test--buffer 'c)))
+      (unwind-protect
+          (progn
+            ;; Start with A and B as the two newest layouts, with C behind
+            ;; them.  This is the state described by the user-facing workflow.
+            (dolist (buffer (list c b a))
+              (switch-to-buffer buffer)
+              (bazooka-remember))
+            (let ((a-entry (nth 0 (bazooka-entries)))
+                  (c-entry (nth 2 (bazooka-entries))))
+              ;; Accepting C and then A in the picker promotes each committed
+              ;; selection, resulting in A, C, B MRU order.
+              (bazooka-restore c-entry t)
+              (bazooka-restore a-entry t)
+              (should (equal (mapcar #'bazooka-test--entry-buffer-name
+                                     (bazooka-entries))
+                             (mapcar #'buffer-name (list a c b))))
+              (bazooka-toggle)
+              (should (eq (window-buffer) c))))
+        (mapc #'kill-buffer (list a b c))))))
+
+(ert-deftest bazooka-test-items-exclude-the-current-layout ()
+  (bazooka-test--with-clean-frame
+    (let ((one (bazooka-test--buffer 'one))
+          (two (bazooka-test--buffer 'two)))
+      (unwind-protect
+          (progn
+            (switch-to-buffer one)
+            (bazooka-remember)
+            (switch-to-buffer two)
+            (bazooka-remember)
+            (let ((items (bazooka--items)))
+              (should (= (length items) 1))
+              (should (equal (bazooka-test--entry-buffer-name (cdar items))
+                             (buffer-name one)))))
+        (kill-buffer one)
+        (kill-buffer two)))))
+
 (ert-deftest bazooka-test-preview-restores-origin-on-cancel ()
   (bazooka-test--with-clean-frame
     (let ((one (bazooka-test--buffer 'one))
@@ -321,16 +363,46 @@
 
 (ert-deftest bazooka-test-consult-read-unwraps-selected-entry ()
   (bazooka-test--with-clean-frame
-    (bazooka-remember)
-    (let ((entry (car (bazooka-entries))))
-      (cl-letf (((symbol-function 'consult--multi)
-                 (lambda (&rest _arguments)
-                   (cons entry '(:name "Bazooka view")))))
-        (should (eq (bazooka--consult-read) entry))))))
+    (let ((saved (bazooka-test--buffer 'saved))
+          (current (bazooka-test--buffer 'current)))
+      (unwind-protect
+          (progn
+            (switch-to-buffer saved)
+            (bazooka-remember)
+            (let ((entry (car (bazooka-entries))))
+              (switch-to-buffer current)
+              (cl-letf (((symbol-function 'consult--multi)
+                         (lambda (&rest _arguments)
+                           (cons entry '(:name "Bazooka view")))))
+                (should (eq (bazooka--consult-read) entry)))))
+        (kill-buffer saved)
+        (kill-buffer current)))))
+
+(ert-deftest bazooka-test-consult-commits-with-promotion ()
+  (let ((entry (bazooka--make-entry))
+        restore-arguments
+        (consult-was-loaded (featurep 'consult)))
+    (unwind-protect
+        (progn
+          (provide 'consult)
+          (cl-letf (((symbol-function 'bazooka--consult-read) (lambda () entry))
+                    ((symbol-function 'bazooka-restore)
+                     (lambda (&rest arguments)
+                       (setq restore-arguments arguments))))
+            (bazooka-consult)
+            (should (equal restore-arguments (list entry t)))))
+      (unless consult-was-loaded
+        (setq features (delq 'consult features))))))
 
 (ert-deftest bazooka-test-completing-read-errors-without-layouts ()
   (bazooka-test--with-clean-frame
     (should-error (bazooka--completing-read) :type 'user-error)))
+
+(ert-deftest bazooka-test-picker-errors-when-current-is-only-layout ()
+  (bazooka-test--with-clean-frame
+    (bazooka-remember)
+    (should-error (bazooka--completing-read) :type 'user-error)
+    (should-error (bazooka--consult-read) :type 'user-error)))
 
 (provide 'bazooka-test)
 ;;; bazooka-test.el ends here
