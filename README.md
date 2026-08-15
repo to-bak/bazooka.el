@@ -2,32 +2,28 @@
 
 [![CI](https://github.com/to-bak/bazooka.el/actions/workflows/ci.yml/badge.svg)](https://github.com/to-bak/bazooka.el/actions/workflows/ci.yml)
 
+## Wip
 > [!NOTE]
 > Bazooka is suuuuper vibe-coded and currently validated through automated
 > tests and daily personal use. If the package gains wider adoption,
 > I'll code it properly xoxo
 
-Bazooka is a tiny, explicit safety net for Emacs window layouts. Remember a
-useful layout, let an agenda, dashboard, or an enthusiastic command take over
-the frame, and restore your checkpoint later.
+Bazooka is a tiny package to quickly anchor and switch between window layouts.
 
-It is deliberately **not** a workspace or buffer-isolation package. Bazooka
-does not manage projects, tabs, activities, or which buffers belong together.
-It only records window layouts when you ask it to.
+## The problems
+- Quickly switching between two window layouts can be a hassle.
+- Some emacs frameworks like org-agenda might obliterate your window layout;
+
+## The solution
+- A buffer of window layouts manually or progamatically managed by the user through `bazooka-remember` and `bazooka-toggle`.
 
 ## How it behaves
 
-- Saved layouts are local to each frame.
-- Nothing is recorded implicitly. `bazooka-remember` and `bazooka-toggle` are
-  the only commands that save a layout.
-- The default capacity is four layouts. Remembering a fifth evicts the oldest.
-- Remembering an equivalent visible layout refreshes it instead of adding a
-  duplicate.
-- Restoring or previewing a layout does not change the saved list.
-- `bazooka-toggle` remembers the layout you are leaving, then jumps to the
-  newest different saved layout. Repeating it swaps naturally between layouts.
-- Saved layouts live only for the Emacs session. Bazooka intentionally does not
-  persist buffers or window state to disk.
+- Nothing is recorded implicitly. Run `bazooka-remember` or `bazooka-toggle` are
+  to save your precious window layout!
+- The package maintains a configurable amount of window layouts (default 4).
+- The window layouts are sorted and managed internally as MRU. If the capacity of layouts is exceeded, we evict the LRU.
+- Some `consult` nicities to preview layouts
 
 ## Requirements
 
@@ -64,30 +60,18 @@ For local development, put the checkout on `load-path`:
   :load-path "~/git/bazooka.el")
 ```
 
-Bazooka installs no global keybindings. One possible setup is:
-
-```elisp
-(keymap-global-set "C-c f r" #'bazooka-remember)
-(keymap-global-set "C-c f f" #'bazooka-toggle)
-(keymap-global-set "C-c f b" #'bazooka-select)
-(keymap-global-set "C-c f c" #'bazooka-clear)
-```
-
 ## Commands
 
-| Command | Effect |
-| --- | --- |
-| `bazooka-remember` | Explicitly save or refresh the current layout |
-| `bazooka-toggle` | Save the departure layout and restore the newest different one |
-| `bazooka-select` | Pick a layout, using Consult preview when available |
-| `bazooka-consult` | Require Consult and open the preview picker |
-| `bazooka-restore` | Pick and restore an entry without reordering saved layouts |
-| `bazooka-clear` | Clear the selected frame's saved layouts |
+| Command            | Effect                                                         |
+|--------------------|----------------------------------------------------------------|
+| `bazooka-remember` | Explicitly save or refresh the current layout                  |
+| `bazooka-toggle`   | Save the departure layout and restore the newest different one |
+| `bazooka-select`   | Pick a layout, using Consult preview when available            |
+| `bazooka-consult`  | Require Consult and open the preview picker                    |
+| `bazooka-restore`  | Pick and restore an entry, promoting interactive selections    |
+| `bazooka-clear`    | Clear the selected frame's saved layouts                       |
 
-Set `bazooka-capacity` to control how many layouts each frame keeps. Set
-`bazooka-preview-key` using the same forms accepted by Consult's preview-key
-settings; for example, use `nil` to disable previews or `"M-."` for manual
-preview.
+Set `bazooka-capacity` to control how many layouts each frame keeps.
 
 ## Development
 

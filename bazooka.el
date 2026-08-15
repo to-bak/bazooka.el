@@ -155,19 +155,25 @@ keeps Consult's originating window alive across successive previews."
       (window-state-put state chosen 'safe))))
 
 ;;;###autoload
-(defun bazooka-restore (entry)
-  "Restore Bazooka ENTRY without changing the saved-layout list."
+(defun bazooka-restore (entry &optional promote)
+  "Restore Bazooka ENTRY.
+When PROMOTE is non-nil, move ENTRY to the front of the saved-layout list.
+Programmatic calls do not change the list unless they explicitly request it."
   (interactive
    (list (if (require 'consult nil t)
              (bazooka--consult-read)
-           (bazooka--completing-read))))
+           (bazooka--completing-read))
+         t))
   (unless (bazooka-entry-p entry)
     (user-error "Not a Bazooka entry"))
   (let ((frame (bazooka-entry-frame entry)))
     (unless (frame-live-p frame)
       (user-error "The saved frame no longer exists"))
     (condition-case error-data
-        (bazooka--put-state (bazooka-entry-state entry) frame)
+        (progn
+          (bazooka--put-state (bazooka-entry-state entry) frame)
+          (when promote
+            (bazooka--store-entry frame entry)))
       (error
        (user-error "Cannot restore that view: %s"
                    (error-message-string error-data))))))
@@ -207,16 +213,20 @@ window changes remain invisible to Bazooka until this command or
               "<unavailable view>")))
 
 (defun bazooka--items ()
-  "Return labeled Bazooka entries for completion."
-  (cl-loop for entry in (bazooka--entries)
-           for index from 1
-           collect (cons (bazooka--entry-label entry index) entry)))
+  "Return labeled Bazooka entries other than the current layout."
+  (let* ((current-signature (bazooka--signature))
+         (entries (cl-remove current-signature (bazooka--entries)
+                             :key #'bazooka-entry-signature
+                             :test #'equal)))
+    (cl-loop for entry in entries
+             for index from 1
+             collect (cons (bazooka--entry-label entry index) entry))))
 
 (defun bazooka--completing-read ()
   "Read and return a Bazooka entry with ordinary completion."
   (let ((items (bazooka--items)))
     (unless items
-      (user-error "Bazooka has no saved views"))
+      (user-error "Bazooka has no other saved views"))
     (alist-get
      (completing-read "Bazooka view: " items nil t nil
                       'bazooka--consult-history)
@@ -250,26 +260,28 @@ window changes remain invisible to Bazooka until this command or
          ;; action then commits the selected layout.
          (bazooka--put-state origin-state origin-frame origin-window))))))
 
-(defun bazooka--consult-source ()
-  "Return the Consult source for saved Bazooka layouts."
+(defun bazooka--consult-source (&optional items)
+  "Return the Consult source for saved Bazooka layouts.
+Use ITEMS when supplied; otherwise compute the selectable entries."
   `(:name "Bazooka view"
     :narrow (?v . "View")
     :category bazooka-view
     :face consult-buffer
     :history bazooka--consult-history
-    :items ,#'bazooka--items
+    :items ,(or items #'bazooka--items)
     :action ,#'identity
     :state ,#'bazooka--consult-state
     :preview-key ,bazooka-preview-key))
 
 (defun bazooka--consult-read ()
   "Read and preview a Bazooka entry with Consult, then return it."
-  (unless (bazooka--entries)
-    (user-error "Bazooka has no saved views"))
-  (car (consult--multi (list (bazooka--consult-source))
-                       :prompt "Bazooka view: "
-                       :sort nil
-                       :require-match t)))
+  (let ((items (bazooka--items)))
+    (unless items
+      (user-error "Bazooka has no other saved views"))
+    (car (consult--multi (list (bazooka--consult-source items))
+                         :prompt "Bazooka view: "
+                         :sort nil
+                         :require-match t))))
 
 ;;;###autoload
 (defun bazooka-consult ()
@@ -277,7 +289,7 @@ window changes remain invisible to Bazooka until this command or
   (interactive)
   (unless (require 'consult nil t)
     (user-error "Bazooka's preview picker requires the Consult package"))
-  (bazooka-restore (bazooka--consult-read)))
+  (bazooka-restore (bazooka--consult-read) t))
 
 ;;;###autoload
 (defun bazooka-select ()
@@ -287,7 +299,7 @@ otherwise."
   (interactive)
   (if (require 'consult nil t)
       (bazooka-consult)
-    (bazooka-restore (bazooka--completing-read))))
+    (bazooka-restore (bazooka--completing-read) t)))
 
 (provide 'bazooka)
 ;;; bazooka.el ends here
